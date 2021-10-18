@@ -1,12 +1,13 @@
 import speech_recognition
 import pyttsx3
+from pydub import AudioSegment
 
 import sounddevice as sd
 from scipy.io.wavfile import write
 
 try:
     import tkinter as tk
-    from tkinter import ttk
+    from tkinter import ttk, filedialog
 except:
     import Tkinter as tk
     from Tkinter import ttk
@@ -16,6 +17,7 @@ COLOR_FRAMEBACKGROUND="#BBCDE5"
 COLOR_HIGHLIGHT="#222222"
 #COLOR_BACKGROUND
 
+file_name = "output.wav"
 root = tk.Tk()
 
 class Funcs():
@@ -25,8 +27,17 @@ class Funcs():
 
 
     def loadFile(self):
-        self.fileAddress = self.FileAddress_entry.get()
-        self.lb_codigo.configure(text=self.fileAddress)
+        root = tk.Tk()
+        root.withdraw()
+        file_name = filedialog.askopenfilename()
+
+    def convertFile(self):
+        root = tk.Tk()
+        root.withdraw()
+        self.song_path = filedialog.askopenfilename()
+        self.song = AudioSegment.from_mp3(self.song_path)
+        self.song.export(file_name, format="wav")
+        print("Done!")
 
     def recordFromMic(self):
         fs = 44100  # Sample rate
@@ -40,11 +51,20 @@ class Funcs():
         while True:
             self.transcricao.insert(tk.END, '.')
             try:
-                self.recognizer =  speech_recognition.Recognizer()
-                self.audioFile = speech_recognition.AudioFile('output.wav')
-                self.transcrito = self.recognizer.recognize_google(self.audioFile)
-                self.transcrito = transcrito.lower()
+                #self.recognizer =  speech_recognition.Recognizer()
+                #self.audioFile = speech_recognition.AudioFile(file_name)
+                #self.transcrito = self.recognizer.recognize_google(audio_data=self.audioFile, language='pt-BR')
+                #self.transcrito = self.transcrito.lower()
+                #self.transcricao.insert(tk.END, self.transcrito)
+                print(file_name)
+                user_audio_file = speech_recognition.AudioFile(file_name)
+                r =  speech_recognition.Recognizer()
+                with user_audio_file as source:
+                    user_audio = r.record(source)
+                self.transcrito = r.recognize_google(user_audio, language='pt-BR')
+                print(self.transcrito)
                 self.transcricao.insert(tk.END, self.transcrito)
+
             except speech_recognition.UnknownValueError:
                 recognizer = speech_recognition.Recognizer()
                 continue
@@ -85,7 +105,7 @@ class Aplication(Funcs):
         self.lb_codigo = tk.Label(self.frame_1, text="Arquivo:", anchor="w", bg=COLOR_FRAMEBACKGROUND)
         self.lb_codigo.place(relx=0.15,rely=0.9, relwidth=0.65, relheight=0.08)
 
-        self.bt_convMP32WAV = tk.Button(self.frame_1, text="MP3 to WAV", command=self.limpa_tela)
+        self.bt_convMP32WAV = tk.Button(self.frame_1, text="MP3 to WAV", command=self.convertFile)
         self.bt_convMP32WAV.place(relx=0.05,rely=0.45, relwidth=0.2, relheight=0.15)
 
         self.bt_listenMIC = tk.Button(self.frame_1, text="MIC", command=self.recordFromMic)
