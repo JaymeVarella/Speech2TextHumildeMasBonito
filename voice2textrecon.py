@@ -2,14 +2,21 @@ import speech_recognition
 import pyttsx3
 
 import sounddevice as sd
+import soundfile as sf
+from pydub import AudioSegment
+
 from scipy.io.wavfile import write
 
 try:
     import tkinter as tk
-    from tkinter import ttk
+    from tkinter import ttk, filedialog
 except:
     import Tkinter as tk
     from Tkinter import ttk
+
+REC_DURATION = 5
+LANGUAGE = "pt-BR"
+FILENAME = "output.wav"
 
 COLOR_WINDOWBACKGROUND="#1C5D99"
 COLOR_FRAMEBACKGROUND="#BBCDE5"
@@ -27,30 +34,93 @@ class Funcs():
     def loadFile(self):
         self.fileAddress = self.FileAddress_entry.get()
         self.lb_codigo.configure(text=self.fileAddress)
+        #root = tk.Tk()
+        root.withdraw()
+        file_name = filedialog.askopenfilename()
+
+    def convertFile(self):
+        #root = tk.Tk()
+        root.withdraw()
+        self.song_path = filedialog.askopenfilename()
+        self.song = AudioSegment.from_mp3(self.song_path)
+        self.song.export(self.soundFileName, format="wav")
+        self.lb_codigo.configure(text=f"Arquivo {self.soundFileName} convertido para .wav!")
+        print("Done!")
 
     def recordFromMic(self):
         fs = 44100  # Sample rate
-        seconds = 5  # Duration of recording
+        seconds = REC_DURATION  # Duration of recording
+        self.transcricao.insert(tk.END, "***\n")
         self.audio = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
         sd.wait()  # Wait until recording is finished
-        write('output.wav', fs, self.audio)
-        self.lb_codigo.configure(text="Arquico criado!")
+        write(self.soundFileName, fs, self.audio)
+        data, samplerate = sf.read(self.soundFileName)
+        sf.write('sfOutpt.wav', data, samplerate, subtype='PCM_16')
+        sf.write('sfOutpt.flac', data, samplerate)
+        self.lb_codigo.configure(text=f"Arquivo {self.soundFileName} criado!")
 
     def transcreverAudio(self):
+        self.transcricao.delete('1.0', tk.END)
         while True:
-            self.transcricao.insert(tk.END, '.')
             try:
                 self.recognizer =  speech_recognition.Recognizer()
-                self.audioFile = speech_recognition.AudioFile('output.wav')
-                self.transcrito = self.recognizer.recognize_google(self.audioFile)
-                self.transcrito = transcrito.lower()
-                self.transcricao.insert(tk.END, self.transcrito)
+                with speech_recognition.AudioFile('sfOutpt.flac') as self.audioFile:
+                    self.audio = self.recognizer.listen(self.audioFile)
+                    self.transcrito = self.recognizer.recognize_google(self.audio,language=LANGUAGE)
+                    self.transcrito = self.transcrito.lower()
+                    self.transcricao.insert(tk.END, self.transcrito)
+                    break
+                #self.audioFile = speech_recognition.AudioFile('output.wav')
+                #self.transcrito = self.recognizer.recognize_google(self.audioFile)
+                #self.transcrito = transcrito.lower()
+                #self.transcricao.insert(tk.END, self.transcrito)
             except speech_recognition.UnknownValueError:
-                recognizer = speech_recognition.Recognizer()
+                self.recognizer = speech_recognition.Recognizer()
                 continue
+            #endwhile
+
+    def liveTranscript(self):
+        self.transcricao.delete('1.0', tk.END)
+        self.continueLive = True
+        fs = 44100  # Sample rate
+        seconds = 5  # Duration of recording
+        #self.audio = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
+        while self.continueLive:
+            try:
+                self.recognizer =  speech_recognition.Recognizer()
+                mic = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
+                #self.recognizer.adjust_for_ambient_noise(mic, duration=0.2)
+                audio = self.recognizer.listen(mic)
+                text  = self.recognizer.recognize_google(audio)
+                text = text.lower()
+                self.transcricao.insert(tk.END, text)
+
+            except speech_recognition.UnknownValueError:
+                self.recognizer = speech_recognition.Recognizer()
+                self.transcricao.insert(tk.END, f'Erro na leitura do audio!')
+                continue
+
+    def stopTranscript(self):
+        self.continueLive = False
+
+    def saveToClipboard(self):
+        try:
+            root.clipboard_clear()
+            root.clipboard_appent(self.transcricao.get("1.0",tk.END))
+            root.update()
+        except:
+            print("Not working.")
+
+    def save_txt(self):
+        text = self.transcricao.get("1.0",'end-1c')
+        with open("output.txt","w") as f:
+            f.write(text+"\n")
+
 
 class Aplication(Funcs):
     def __init__(self):
+        self.soundFileName = FILENAME
+
         self.root = root
         self.tela()
         self.campos()
@@ -85,11 +155,16 @@ class Aplication(Funcs):
         self.lb_codigo = tk.Label(self.frame_1, text="Arquivo:", anchor="w", bg=COLOR_FRAMEBACKGROUND)
         self.lb_codigo.place(relx=0.15,rely=0.9, relwidth=0.65, relheight=0.08)
 
-        self.bt_convMP32WAV = tk.Button(self.frame_1, text="MP3 to WAV", command=self.limpa_tela)
+        self.bt_convMP32WAV = tk.Button(self.frame_1, text="MP3 to WAV", command=self.convertFile)
         self.bt_convMP32WAV.place(relx=0.05,rely=0.45, relwidth=0.2, relheight=0.15)
 
         self.bt_listenMIC = tk.Button(self.frame_1, text="MIC", command=self.recordFromMic)
         self.bt_listenMIC.place(relx=0.3,rely=0.45, relwidth=0.2, relheight=0.15)
+
+        self.bt_listenMICLive = tk.Button(self.frame_1, text="Live MIC", command=self.liveTranscript)
+        self.bt_listenMICLive.place(relx=0.55,rely=0.45, relwidth=0.2, relheight=0.15)
+        self.bt_stopMICLive = tk.Button(self.frame_1, text="stop", command=self.stopTranscript)
+        self.bt_stopMICLive.place(relx=0.75,rely=0.45, relwidth=0.1, relheight=0.15)
 
         #limpar tudo
         self.bt_limpar = tk.Button(self.frame_1, text="Limpar", command=self.limpa_tela)
@@ -104,30 +179,13 @@ class Aplication(Funcs):
         self.transcricao = tk.Text(self.frame_2)
         self.transcricao.place(relx=0.01,rely=0.1,relwidth = 0.98, relheight = 0.75)
 
-        self.bt_saveTXT = tk.Button(self.frame_2, bg="#639FAB", text="Salvar em TXT")
+        self.bt_saveTXT = tk.Button(self.frame_2, bg="#639FAB", text="Salvar em TXT", command=self.save_txt)
         self.bt_saveTXT.place(relx=0.80,rely=0.86, relwidth=0.19, relheight=0.13)
 
-        self.bt_saveclipboard = tk.Button(self.frame_2, bg="#639FAB", text="Salvar na Área de Transferência")
-        self.bt_saveclipboard.place(relx=0.60,rely=0.86, relwidth=0.19, relheight=0.13)
+        self.bt_saveclipboard = tk.Button(self.frame_2, bg="#639FAB", text="Salvar na Área de Transferência", command=self.saveToClipboard)
+        self.bt_saveclipboard.place(relx=0.50,rely=0.86, relwidth=0.24, relheight=0.13)
 
 
-    def transcr_area(self):
-        self.listaCli = ttk.Treeview(self.frame_2, height=3, column=("col1","col2 ","col3","col4"))
-        self.listaCli.heading("#0",text="")
-        self.listaCli.heading("#1",text="codigo")
-        self.listaCli.heading("#2",text="Nome")
-        self.listaCli.heading("#3",text="tel")
-        self.listaCli.heading("#4",text="cid")
-        self.listaCli.column("#0",width=1)
-        self.listaCli.column("#1",width=50)
-        self.listaCli.column("#2",width=200)
-        self.listaCli.column("#3",width=125)
-        self.listaCli.column("#4",width=125)
-        self.listaCli.place(relx=0.01,rely=0.5,relwidth=0.95,relheight=0.85)
-
-        self.scroollista = tk.Scrollbar(self.frame_2, orient="vertical")
-        self.listaCli.configure(yscroll = self.scroollista)
-        self.scroollista.place(relx=0.96,rely=0.5,relwidth=0.04,relheight=0.45)
 
 
 if __name__== '__main__':
